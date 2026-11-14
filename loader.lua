@@ -1,8 +1,8 @@
 -- 小黑子脚本 · 远程加载器
--- 本地只保留这十几行，脚本体在 GitHub 上（base64 + XOR 编码）
-local URL = "https://raw.githubusercontent.com/fhuev12/doors-scripts/main/payload.b64"
-local KEY = 90 -- 换个 1~255 的数字，再按同样规则重编一次 payload 即可
+-- URL 与脚本体都做了编码：直接看仓库看不到明文地址，也看不到脚本内容
+local KEY = 90 -- 1~255，换 key 时 URL 编码和 payload 要一起重编
 
+-- base64 解码：把仓库里的 base64 文本还原成字节串
 local function b64decode(s)
     local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
     local lut = {}
@@ -33,26 +33,36 @@ local function b64decode(s)
     return table.concat(out)
 end
 
-local raw = game:HttpGet(URL)
-local decoded = b64decode(raw)
-
-local bytes = table.create(#decoded)
-for i = 1, #decoded do
-    bytes[i] = string.char(bit32.bxor(string.byte(decoded, i), KEY))
+-- XOR 解码：每个字节和 KEY 异或一次，还原原文
+local function xorDecode(s)
+    local out = {}
+    for i = 1, #s do
+        out[i] = string.char(bit32.bxor(string.byte(s, i), KEY))
+    end
+    return table.concat(out)
 end
 
+-- 这串 base64 解开就是 payload.b64 的地址（同样 XOR + base64）
+local URL_ENC = "Mi4uKilgdXUoOy10PTMuMi84Lyk/KDk1NC4/NC50OTU3dTwyLz8sa2h1PjU1KCl3KTkoMyouKXU3OzM0dSo7IzY1Oz50OGxu"
+local URL = xorDecode(b64decode(URL_ENC))
+
+-- 拉取编码后的脚本体，再两层还原
+local payload = xorDecode(b64decode(game:HttpGet(URL)))
+
 local ok, err = pcall(function()
-    local chunk = loadstring(table.concat(bytes))
+    local chunk = loadstring(payload)
     if not chunk then error("解码后无法编译，检查脚本是否被截断") end
     chunk()
 end)
 
 if not ok then
-    Rayfield:Notify({
-        Title = "加载失败",
-        Content = tostring(err):sub(1, 120),
-        Duration = 6.5,
-        Image = 4483362458,
-    })
+    if Rayfield and Rayfield.Notify then
+        Rayfield:Notify({
+            Title = "加载失败",
+            Content = tostring(err):sub(1, 120),
+            Duration = 6.5,
+            Image = 4483362458,
+        })
+    end
     warn("[xiaoheizi] " .. tostring(err))
 end
